@@ -1,0 +1,6 @@
+{
+  "name": "file-header",
+  "dependencies": {
+    "line-replace": "^2.0.1"
+  }
+}

@@ -1,0 +1,108 @@
+#!/usr/bin/env node
+
+/*
+ * @Author       : Eleanor Mao
+ * @Date         : 2021-05-18 10:04:12
+ * @LastEditTime : 2021-05-18 10:04:02
+ */
+
+const fs = require('fs')
+const readline = require('readline');
+const lineReplace = require('line-replace')
+
+Date.prototype.format = function (format) {
+  const o = {
+    "M+": this.getMonth() + 1, //month
+    "d+": this.getDate(), //day
+    "h+": this.getHours(), //hour
+    "m+": this.getMinutes(), //minute
+    "s+": this.getSeconds(), //second
+    "q+": Math.floor((this.getMonth() + 3) / 3), //quarter
+    "S": this.getMilliseconds() //millisecond
+  }
+  if (/(y+)/.test(format)) {
+    format = format.replace(RegExp.$1, (this.getFullYear() + "").substr(4 - RegExp.$1.length));
+  }
+  for (let k in o) {
+    if (new RegExp("(" + k + ")").test(format)) {
+      format = format.replace(RegExp.$1, RegExp.$1.length == 1 ? o[k] : ("00" + o[k]).substr(("" + o[k]).length));
+    }
+  }
+  return format;
+}
+
+const filePath = process.argv[2]
+
+const rl = readline.createInterface({
+  input: fs.createReadStream(filePath),
+  crlfDelay: Infinity
+});
+
+async function runPlugin() {
+  let comment = false
+  let count = -1
+  let diff = -1
+  // let authorText = ''
+  // let authorLine = -1
+  let lastTimeText = ''
+  let lastTimeLine = -1
+  for await (let line of rl) {
+    count++
+    let lineTextOriginal = line
+    line = line.trim()
+    if (line.startsWith("/*") && !line.endsWith("*/")) {
+      comment = true
+    } else if (comment) {
+      if (line.endsWith("*/")) {
+        comment = false
+      }
+      // if (line.indexOf('@Last\ Modified\ by') > -1) {
+      //   authorLine = count
+      //   let replaceAuthorReg = /^(.*?)(@Last Modified by:)(\s*)(\S*)$/;
+      //   if (replaceAuthorReg.test(lineTextOriginal)) {
+      //     authorText = lineTextOriginal.replace(replaceAuthorReg, function (match, p1, p2, p3) {
+      //       return p1 + p2 + p3 + config.LastModifiedBy;
+      //     });
+      //   } else {
+      //     authorText = ' * @Last Modified by: ' + config.LastModifiedBy;
+      //   }
+      // } else
+      if (line.indexOf('@LastEditTime') > -1) {
+        lastTimeLine = count + 1
+        let time = line.replace('@LastEditTime:', '').replace('*', '');
+        let oldTime = new Date(time);
+        let curTime = new Date();
+        diff = (curTime - oldTime) / 1000;
+        let replaceTimeReg = /^(.*?)(@LastEditTime:)(\s*)(.*)$/;
+        let currTimeFormat = curTime.format("yyyy-MM-dd hh:mm:ss");
+        if (replaceTimeReg.test(lineTextOriginal)) {
+          lastTimeText = lineTextOriginal.replace(replaceTimeReg, function (match, p1, p2, p3) {
+            return p1 + p2 + p3 + currTimeFormat;
+          });
+        } else {
+          lastTimeText = ' * @LastEditTime : ' + currTimeFormat;
+        }
+        if (!comment) {
+          break;
+        }
+      }
+    }
+
+
+    if ((lastTimeLine > -1 && lastTimeText) && (diff > 100)) {
+      setTimeout(function () {
+        lineReplace({
+          file: filePath,
+          line: lastTimeLine,
+          text: lastTimeText + '\n',
+          addNewLine: false,
+          callback(obj) {
+            console.log(obj)
+          }
+        })
+      }, 200);
+    }
+  }
+}
+
+runPlugin()
